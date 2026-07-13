@@ -100,7 +100,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "petclinic.war"
-          target: "/home/ubuntu"
+          target: "/home/ec2-user"
 
       # Verify WAR on EC2
       - name: Verify WAR in EC2
@@ -110,4 +110,4 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            ls -lh /home/ubuntu
+            ls -lh /home/ec2-user
