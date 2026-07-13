@@ -1,9 +1,11 @@
-name: Maven Build and SonarQube
+name: Maven Build, SonarQube and Nexus
 
 on:
   push:
     branches:
       - master
+
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,10 +14,11 @@ jobs:
 
     steps:
 
+      # Checkout Source Code
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # Build with Java 8
+      # Java 8 for Maven Build
       - name: Setup Java 8
         uses: actions/setup-java@v4
         with:
@@ -23,16 +26,23 @@ jobs:
           java-version: '8'
           cache: maven
 
+      # Build Application
       - name: Build Project
         run: mvn clean install -DskipTests
 
-      # Switch to Java 17
+      # Verify WAR File
+      - name: Verify WAR File
+        run: |
+          ls -lh target
+
+      # Java 17 for SonarQube
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # SonarQube Scan
       - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -40,25 +50,18 @@ jobs:
         run: |
           mvn sonar:sonar \
             -Dsonar.projectKey=petclinic \
+            -Dsonar.projectName=petclinic \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.token=$SONAR_TOKEN
-      - name: Configure Maven Settings
-        run: |
-         mkdir -p ~/.m2
-         cat > ~/.m2/settings.xml <<EOF
-         <settings>
-         <servers>
-         <server>
-          <id>nexus</id>
-          <username>${{ secrets.NEXUS_USERNAME }}</username>
-          <password>${{ secrets.NEXUS_PASSWORD }}</password>
-           </server>
-          </servers>
-         </settings>
-         EOF
 
+      # Upload WAR to Nexus
       - name: Upload Artifact to Nexus
         run: |
-         curl -v -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
-         --upload-file target/*.war \
-         ${{ secrets.NEXUS_URL }}/repository/maven-releases/petclinic.war
+          FILE=$(find target -name "*.war" | head -1)
+
+          echo "Uploading: $FILE"
+
+          curl -v \
+            -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
+            --upload-file "$FILE" \
+            "http://52.197.210.82:8081/repository/maven-snapshots/$(basename "$FILE")"
