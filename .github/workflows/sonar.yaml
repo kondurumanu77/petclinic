@@ -52,5 +52,63 @@ jobs:
             -Dsonar.projectName=petclinic \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.token=$SONAR_TOKEN
+   # Java 8 again for Deploy
+      - name: Setup Java 8 Again
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      # Configure Maven Settings
+      - name: Configure Maven Settings
+        run: |
+          mkdir -p ~/.m2
+
+          cat > ~/.m2/settings.xml <<EOF
+          <settings>
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${{ secrets.NEXUS_USERNAME }}</username>
+                <password>${{ secrets.NEXUS_PASSWORD }}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      # Upload WAR to Nexus
+      - name: Upload Artifact to Nexus
+        run: |
+          mvn deploy \
+          -DskipTests \
+          -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_REPO_URL }}
+
+      # Download WAR from Nexus
+      - name: Download WAR from Nexus
+        run: |
+          curl -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
+          -L \
+          "${{ secrets.NEXUS_REPO_URL }}/org/springframework/samples/spring-petclinic/4.2.5-SNAPSHOT/spring-petclinic-4.2.5-SNAPSHOT.war" \
+          -o petclinic.war
+
+      # Copy WAR to EC2
+      - name: Copy WAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "petclinic.war"
+          target: "/home/ec2-user"
+
+      # Verify WAR on EC2
+      - name: Verify WAR in EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            ls -lh /home/ec2-user
 
     
